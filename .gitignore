@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+# Node / TypeScript (added — this repo runs a Node/TS backend and this
+# .gitignore was Python-only before, so node_modules wasn't excluded)
+node_modules/
+dist/
+*.tsbuildinfo
+
+# NeDB local data files — these are per-developer local state, not source
+apps/api-server/data/

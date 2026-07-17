@@ -1,0 +1,49 @@
+{
+  "name": "campus-connect-ai",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "nodemon --watch apps/api-server/src --ext ts --exec tsx apps/api-server/src/server.ts",
+    "build": "tsc -p apps/api-server/tsconfig.json",
+    "start": "node apps/api-server/dist/server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ridheshcybe/campus-connect-ai.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/ridheshcybe/campus-connect-ai/issues"
+  },
+  "homepage": "https://github.com/ridheshcybe/campus-connect-ai#readme",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "morgan": "^1.11.0",
+    "nedb-promises": "^6.2.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/morgan": "^1.9.9",
+    "@types/node": "^26.1.1",
+    "nodemon": "^3.1.14",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2"
+  }
+}

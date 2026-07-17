@@ -1,18 +1,16 @@
 // apps/api-server/src/server.ts
 
-import express from "express";
-import { callsRouter } from "./calls/index";
+import path from "path";
+import dotenv from "dotenv";
 
-const app = express();
-const PORT = 3000;
+// Load apps/api-server/.env explicitly — dotenv's default `import
+// "dotenv/config"` only looks in process.cwd(), which is the repo root
+// when this is started via the root npm scripts, not this folder.
+dotenv.config({ path: path.join(__dirname, "..", ".env") });
 
-app.use(express.json());
+import { app } from "./app";
 
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok" });
-});
-
-app.use("/calls", callsRouter);
+const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 
 app.listen(PORT, () => {
   console.log(`CampusConnect AI API server running on http://localhost:${PORT}`);
