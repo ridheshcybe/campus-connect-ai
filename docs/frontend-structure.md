@@ -1,5 +1,9 @@
 # Frontend Structure
 
+> The `web-admin` dashboard — its screens, folder structure, and the `lib/api` + hooks data pattern. This doc is the **spec/structure**; the build guide is [`frontend-development.md`](frontend-development.md).
+> **Owners (by layer):** Tanishqa & Surya build the UI (components, pages, UX); Don & Ridhesh own the structure + integration layer (`lib/api`, `hooks`, shared types). · **Status:** Living · Blueprint → §4.6.
+> **Stack:** React 18 + Vite + React Router + Tailwind + TanStack Query. Shared components come from [`packages/ui`](codebase-organization.md#packagesui); the runtime wiring to the backend is in [`integration.md`](integration.md).
+
 ## Admin Pages
 
 ### Login
@@ -114,3 +118,18 @@ For example, the `features/calls/CallLogTable` page imports `useCalls` from `hoo
 **Tenant isolation** is handled automatically: the `lib/api` layer reads the JWT from the auth context and includes it in every request's `Authorization` header. The backend decodes the JWT, extracts the `tenantId`, and scopes all database queries to that tenant. The frontend never manually passes `tenantId` — it's embedded in the token.
 
 All API responses are scoped to the current tenant. An admin from College ABC will only ever see ABC's calls, FAQs, documents, and settings — the backend enforces this at the query level and the RLS policies provide a second layer of defence.
+
+## Current State & Refactor Target
+
+Today `web-admin` is a stub: `main.tsx` exports an `App` but never mounts it (no `ReactDOM.createRoot`, no router), and both `DashboardPage` and `CallLogTable` carry their **own hardcoded `dummyCalls` arrays** instead of fetching. The M0–M1 refactor:
+
+1. **Mount & route** — add `ReactDOM.createRoot` and React Router with the pages above.
+2. **Introduce the data layer** — create `lib/api/` (transport) and `hooks/` (TanStack Query), typed with [`@campus/types`](codebase-organization.md#packagestypes).
+3. **Delete the dummy arrays** — components receive data via props from hooks; the generic table moves to `packages/ui` as `DataTable`, with `CallLogTable` composing it. See the component-integration path in [`codebase-organization.md`](codebase-organization.md#5-component-integration-how-a-shared-component-reaches-a-screen).
+
+## Related docs
+
+- [`integration.md`](integration.md) — the full FE↔BE↔AI wiring (auth, `lib/api`, hooks, real-time).
+- [`codebase-organization.md`](codebase-organization.md) — how `packages/ui` components reach these screens.
+- [`api-endpoints.md`](api-endpoints.md) — the endpoints each hook calls.
+- [Project Blueprint](PROJECT-BLUEPRINT.md) — the overall plan.

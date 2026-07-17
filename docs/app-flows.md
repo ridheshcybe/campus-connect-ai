@@ -1,5 +1,8 @@
 # Application Flows
 
+> The three end-to-end flows that define the product's behaviour: inbound call, outbound follow-up, and admin dashboard.
+> **Owners:** Don & Ridhesh · **Status:** Living · Part of the [Project Blueprint](PROJECT-BLUEPRINT.md) → §4.2. The AI step is detailed in [`ai-flow.md`](ai-flow.md); the API calls in [`api-endpoints.md`](api-endpoints.md).
+
 ## Incoming Call Flow
 
 1. **Caller dials the college's Twilio number** — The caller (student, parent, or prospective applicant) dials the dedicated phone number assigned to their college. The call is routed through the PSTN to Twilio.
@@ -107,3 +110,25 @@ The **Worker** service is responsible for scheduling and executing outgoing foll
    - Delete outdated entries
    
    Changes take effect immediately — the next call on that topic will use the updated knowledge base.
+
+## Error & Edge Paths
+
+The happy paths above are the norm; these are the cases the system must also handle gracefully. The unifying rule: **the caller never hits a dead end — the fallback is always a human, a retry, or a callback.**
+
+| Situation | Behaviour |
+|---|---|
+| **ASR can't understand / silence** | The Orchestrator re-prompts ("Sorry, I didn't catch that…") up to N times, then offers a human transfer or callback. |
+| **Language not detected** | Fall back to the IVR key-press language menu; default to English if none chosen. |
+| **AI low confidence (`< 0.7`)** | `shouldEscalate = true` → warm transfer or callback offer; the call is logged as `escalated`. See [`ai-flow.md`](ai-flow.md#escalation-logic). |
+| **LLM / ASR / TTS provider down** | `/ai/answer` returns a safe escalation (or `502`); the Orchestrator plays "connecting you to staff" and transfers. |
+| **No staff available / out of business hours** | The AI offers a callback; the Worker schedules an outbound follow-up. |
+| **Backend logging call fails mid-call** | The caller experience continues; the Orchestrator retries the `/internal/calls` write with an `Idempotency-Key`, so logging catches up without duplicating. |
+| **Caller barge-in (speaks over the AI)** | The Orchestrator stops TTS and switches to listening. |
+| **Follow-up recipient unreachable** | The Worker reschedules per the tenant's retry policy, then marks it `rescheduled`/`failed`. |
+
+## Related docs
+
+- [`ai-flow.md`](ai-flow.md) — the detail of steps 6–8 (the AI answer).
+- [`architecture.md`](architecture.md) — the components these flows run through.
+- [`api-endpoints.md`](api-endpoints.md) — the endpoints each step calls.
+- [`integration.md`](integration.md) — how the admin dashboard flow is wired to the backend.

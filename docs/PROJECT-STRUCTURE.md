@@ -1,5 +1,8 @@
 # Project Structure
 
+> The monorepo layout — what each app and package is for. Companion to [`codebase-organization.md`](codebase-organization.md), which covers *how* they're wired (workspaces, dependency direction, conventions).
+> **Owners:** Don & Ridhesh · **Status:** Living · Part of the [Project Blueprint](PROJECT-BLUEPRINT.md) → §4.1 / §5.
+
 ## Monorepo Layout
 
 CampusConnect AI is organised as a monorepo with two top-level directories: `apps/` for deployable applications and `packages/` for shared libraries. This layout keeps service boundaries clear while enabling code reuse across the stack (shared types, UI components, configuration, and AI prompt templates).
@@ -24,7 +27,7 @@ campusconnect-ai/
 ## Applications (apps/)
 
 ### web-admin
-The admin dashboard — a React (Next.js) single-page application that college staff use to review call logs, listen to recordings, read transcripts, manage FAQs and uploaded documents, handle escalations, schedule follow-ups, and configure tenant-level settings. It consumes the api-server REST endpoints and uses WebSockets for real-time escalation and call status updates.
+The admin dashboard — a React **single-page application built with Vite** that college staff use to review call logs, listen to recordings, read transcripts, manage FAQs and uploaded documents, handle escalations, schedule follow-ups, and configure tenant-level settings. It consumes the api-server REST endpoints and uses WebSockets for real-time escalation and call status updates. (Decision: the admin app is a Vite SPA; only the public `web-landing` marketing site uses Next.js — see the [blueprint decision table](PROJECT-BLUEPRINT.md#6-technology-decisions).)
 
 ### web-landing
 The public marketing site and tenant onboarding portal (optional in the MVP). Built with Next.js, it presents product information, use cases, language support details, and a sign-up flow for new colleges. After onboarding, the tenant is provisioned with a phone number, default voice prompts, and admin credentials.
@@ -55,7 +58,7 @@ A TypeScript package containing all shared type definitions used across the mono
 These types are the source of truth for API contracts between services.
 
 ### config
-Shared configuration constants and utilities used across apps: language and locale codes (`en`, `hi`, `ta`, `te`, `ml`), issue category enums, escalation rule thresholds, tenant configuration defaults, and environment variable helpers. Keeps magic strings and numbers in one place.
+Shared configuration constants and utilities used across apps: language and locale codes (`en`, `hi`, `ta`, `te`, `kn`), issue category enums, escalation rule thresholds, tenant configuration defaults, and environment variable helpers. Keeps magic strings and numbers in one place.
 
 ### prompts
 A collection of AI prompt templates and routing rules. Contains the system prompts for the intent classifier, the RAG response generator, the follow-up conversation initiator, and the escalation classifier. Each template is parameterised by language and issue category. Separating prompts from code allows non-engineers (Tanishqa & Surya) to iterate on prompt quality without touching application logic.
@@ -70,10 +73,31 @@ Infrastructure-as-code scripts and configuration files: Docker Compose for local
 
 ## Ownership
 
-| Area | Owner(s) |
+Authoritative detail in [`TEAM-ROLES.md`](TEAM-ROLES.md); summary here.
+
+| Member | Owns |
 |------|----------|
-| Architecture docs, project structure, application flows, frontend structure, integration design | Don & Ridhesh |
-| `web-admin`, `packages/ui`, `packages/types`, `packages/config` | Don & Ridhesh (co-owners) |
-| `api-server`, `voice-orchestrator`, `worker`, DB schema, telephony and AI endpoint integration | Vinay |
-| `docs/test-plan.md`, test folders and suites under `api-server` and `web-admin` | Rudra |
-| `docs/ai-voice-architecture.md`, `packages/prompts`, ASR/LLM/TTS integration, implementation of `web-admin` components and pages | Tanishqa & Surya |
+| **Vinay** | `api-server`, `voice-orchestrator`, `worker`, DB schema & migrations, `infra/` — backend, APIs, DB integration, AI-service & telephony wiring |
+| **Rudra** | Test suites across all apps, QA process, performance testing, bug reporting ([`test-plan.md`](test-plan.md)) |
+| **Don & Ridhesh** | Architecture/structure/flow docs, `packages/types`, `packages/config`, monorepo tooling, `web-admin` integration layer (`lib/api` + `hooks`), code review |
+| **Tanishqa & Surya** | `packages/prompts`, ASR/LLM/TTS integration, `web-admin` UI, `web-landing`, `packages/ui`, multilingual support, security (post-MVP) |
+
+## Current State vs. Target
+
+The tree above is the **target**. What actually exists today is a small subset — the rest is to be built (see the [milestone roadmap](PROJECT-BLUEPRINT.md#7-current-state-vs-target-the-gap)).
+
+| Path | Target | Exists today |
+|---|---|---|
+| Root tooling (`package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`) | ✅ | ❌ nothing builds yet |
+| `apps/api-server` | full REST + `/ai/answer` | health check + dummy `GET /calls` only |
+| `apps/web-admin` | 7 screens, router, `lib/api`, hooks | 2 screens, dummy data, not mounted |
+| `apps/web-landing`, `apps/voice-orchestrator`, `apps/worker` | ✅ | ❌ not started |
+| `packages/{ui,types,config,prompts}` | ✅ | ❌ not started |
+| `infra/` | ✅ | ❌ not started |
+| `.gitignore` | Node/monorepo | ⚠️ a Python template — **must be replaced** (it ignores `lib/`, which would drop `web-admin/src/lib/api/`) |
+
+## Related docs
+
+- [`codebase-organization.md`](codebase-organization.md) — workspace wiring, dependency direction, conventions, tooling.
+- [`architecture.md`](architecture.md) — what each service does and why.
+- [Project Blueprint](PROJECT-BLUEPRINT.md) — the overall plan and roadmap.

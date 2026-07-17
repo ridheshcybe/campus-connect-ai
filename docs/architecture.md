@@ -1,8 +1,11 @@
 # Architecture
 
+> System components, the multi-tenant model, and the technology behind each service.
+> **Owners:** Don & Ridhesh · **Status:** Living · Part of the [Project Blueprint](PROJECT-BLUEPRINT.md) → §4.1. For the picked tech stack see the [blueprint's decision table](PROJECT-BLUEPRINT.md#6-technology-decisions).
+
 ## Product Overview
 
-CampusConnect AI is a 24/7 multilingual voice assistant purpose-built for college help desks. It handles inbound and outbound phone calls, SMS, and WhatsApp messages across five Indian languages — English, Hindi, Tamil, Telugu, and Malayalam — so that students, parents, and prospective applicants can get instant answers without waiting on hold during business hours. The system understands natural speech, retrieves relevant information from each college's knowledge base, and responds in the caller's own language using text-to-speech.
+CampusConnect AI is a 24/7 multilingual voice assistant purpose-built for college help desks. It handles inbound and outbound phone calls, SMS, and WhatsApp messages across five Indian languages — English, Hindi, Tamil, Telugu, and Kannada — so that students, parents, and prospective applicants can get instant answers without waiting on hold during business hours. The system understands natural speech, retrieves relevant information from each college's knowledge base, and responds in the caller's own language using text-to-speech.
 
 Core features include FAQ answering across categories such as admissions, fees, hostel, transport, placements, scholarships, office hours, fee payment, and complaints; intelligent escalation of doubtful, angry, payment-related, or emergency calls to human staff; automatic logging of transcripts, recordings, caller numbers, and issue categories; and a full admin dashboard for call review, FAQ/document management, and follow-up scheduling.
 
@@ -20,7 +23,7 @@ CampusConnect AI is deployed as a white-label SaaS platform. Each subscribing co
 
 - **Worker (background jobs)** — A job queue consumer (Bull / Sidekiq) that handles asynchronous tasks: scheduling and placing outgoing follow-up calls, generating post-call summaries, sending SMS/WhatsApp notifications, cleaning up stale recordings, and sending daily analytics digests to admin users.
 
-- **Admin Frontend (web-admin)** — A modern single-page application (Next.js / React) that serves as the administrative interface. Admins can view live and historical call logs, listen to recordings, read transcripts, manage FAQs and uploaded documents, handle escalations, schedule callbacks, and configure tenant-level settings.
+- **Admin Frontend (web-admin)** — A React single-page application built with **Vite** (the marketing site `web-landing` uses Next.js for SSR/SEO; the data-heavy admin app is a pure SPA). It serves as the administrative interface: admins view live and historical call logs, listen to recordings, read transcripts, manage FAQs and uploaded documents, handle escalations, schedule callbacks, and configure tenant-level settings. See [`frontend-structure.md`](frontend-structure.md).
 
 - **Database** — PostgreSQL with a multi-tenant schema. Every row in tenant-scoped tables (calls, faqs, documents, users, settings) carries a `tenant_id` column. Row-level security (RLS) policies or application-layer filters ensure queries never cross tenant boundaries. The database also stores the mapping between phone numbers and tenant IDs used during inbound call routing.
 
@@ -58,7 +61,7 @@ Below is the primary data flow for a single inbound call:
  4. ASR (Google/Azure Speech-to-Text)
     ─────────────────────────────────
     • Transcribes audio → text
-    • Detects language (en/hi/ta/te/ml)
+    • Detects language (en/hi/ta/te/kn)
          │
          ▼
  5. AI Service
@@ -104,3 +107,24 @@ Below is the primary data flow for a single inbound call:
 **SMS / WhatsApp flow** follows the same AI pipeline (steps 4–5) but skips ASR and TTS — the user's text comes directly from Twilio Messaging, and the response text is sent back as a message instead of audio.
 
 **Outbound follow-up flow** is triggered by the Worker service, which places a Twilio outbound call and then follows the same Voice Orchestrator → AI pipeline, injecting a follow-up prompt template so the AI initiates the conversation appropriately.
+
+## Non-Functional Requirements
+
+These shape the architecture as much as the features do.
+
+| Concern | Target / approach |
+|---|---|
+| **Latency (voice)** | Perceived response < ~1.5 s from end-of-speech to start-of-answer. Stream ASR partials, retrieve top-k in a single indexed query, stream LLM + TTS. Keep the Orchestrator lean (§ design principle 3 in the blueprint). |
+| **Availability** | Stateless services (`api-server`, `voice-orchestrator`, AI layer) scale horizontally behind a load balancer. Call state lives in the Orchestrator per-connection; durable state in Postgres/Redis. |
+| **Tenant isolation** | `tenantId` on every row + Postgres RLS as defence-in-depth. No shared mutable state across tenants. See [`data-model.md`](data-model.md). |
+| **Security** | JWT auth (`tenantId`+`role`), service tokens for internal calls, secrets from validated env, pre-signed URLs for recordings, TLS everywhere. See [`integration.md`](integration.md#authentication). |
+| **Reliability of AI** | Fail safe: LLM/ASR/TTS errors and low confidence resolve to human escalation, never a confident-wrong answer. See [`ai-flow.md`](ai-flow.md#failure-handling). |
+| **Observability** | Structured logs with `requestId`+`tenantId`, health/readiness endpoints, per-call audit trail. |
+| **Data residency / PII** | Recordings and transcripts are per-tenant in object storage; PII is not logged at info level. |
+
+## Related docs
+
+- [Project Blueprint](PROJECT-BLUEPRINT.md) — the map of everything.
+- [`PROJECT-STRUCTURE.md`](PROJECT-STRUCTURE.md) — how these components map to the repo tree.
+- [`app-flows.md`](app-flows.md) — these components in motion.
+- [`data-model.md`](data-model.md) · [`api-endpoints.md`](api-endpoints.md) — the persistence and API contracts.
