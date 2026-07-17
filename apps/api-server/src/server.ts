@@ -1,19 +1,12 @@
 // apps/api-server/src/server.ts
+import { createApp } from "./app";
+import { env } from "./config/env";
 
-import express from "express";
-import { callsRouter } from "./calls/index";
+const app = createApp();
 
-const app = express();
-const PORT = 3000;
-
-app.use(express.json());
-
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok" });
-});
-
-app.use("/calls", callsRouter);
-
-app.listen(PORT, () => {
-  console.log(`CampusConnect AI API server running on http://localhost:${PORT}`);
+app.listen(env.PORT, () => {
+  console.log(`✅ CampusConnect AI API server running on http://localhost:${env.PORT}`);
+  console.log(`   Health:    http://localhost:${env.PORT}/health`);
+  console.log(`   Calls:     http://localhost:${env.PORT}/api/v1/calls`);
+  console.log(`   Dashboard: http://localhost:${env.PORT}/api/v1/dashboard/stats`);
 });

@@ -34,18 +34,24 @@ TypeScript · pnpm workspaces + Turborepo · Express · React + Vite · Next.js 
 
 ## Getting started
 
-> ⚠️ **The repo is currently a documentation-first skeleton.** There is no `package.json` yet, so the commands below describe the *target* setup being built in milestone **M0** (see the [roadmap](docs/PROJECT-BLUEPRINT.md#7-current-state-vs-target-the-gap)).
+> ✅ **Milestone M0 is done — the app runs.** The monorepo (pnpm + Turborepo), `packages/types` + `packages/config`, the `api-server`, and a working `web-admin` dashboard are in place. The database, auth, and the AI/voice pipeline land in M1+ (see the [roadmap](docs/PROJECT-BLUEPRINT.md#7-current-state-vs-target-the-gap)).
 
 ```bash
-# prerequisites: Node 20 LTS, pnpm, Docker (for Postgres + Redis)
+# prerequisites: Node 20+ and pnpm.
+# If you don't have pnpm:  corepack prepare pnpm@9.12.3 --activate   (or: npm i -g pnpm)
+
 pnpm install
-cp apps/api-server/.env.example apps/api-server/.env   # fill in secrets
-docker compose -f infra/docker-compose.yml up -d        # postgres, redis
-pnpm dev                                                 # all apps via Turborepo
-# or a single app:
-pnpm --filter web-admin dev
-pnpm --filter api-server dev
+pnpm dev            # starts api-server (:4000) + web-admin (:5173) via Turborepo
+# then open http://localhost:5173
+
+# other commands
+pnpm build          # build every package/app
+pnpm typecheck      # typecheck the whole workspace
+pnpm --filter @campus/web-admin dev   # run a single app
+pnpm --filter @campus/api-server dev
 ```
+
+The web-admin dev server proxies `/api` to the api-server, so no extra config is needed. In M0 the api-server serves typed mock data; the database replaces it in M1.
 
 ## Documentation
 
