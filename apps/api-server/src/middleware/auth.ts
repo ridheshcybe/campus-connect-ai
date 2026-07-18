@@ -2,12 +2,13 @@ import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env";
 import { UnauthenticatedError, ForbiddenError } from "../lib/errors";
+import { isBlocklisted } from "../modules/auth/auth.service";
 
 /**
- * Enforces JWT Authentication. Verifies bearer token, decodes payload,
- * and attaches RequestContext to req.ctx.
+ * Enforces JWT Authentication. Verifies bearer token, checks Redis blocklist,
+ * decodes payload, and attaches RequestContext to req.ctx.
  */
-export function requireAuth(req: Request, res: Response, next: NextFunction) {
+export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return next(new UnauthenticatedError("Authorization token required"));
@@ -20,6 +21,11 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     const decoded = jwt.verify(token, env.JWT_SECRET) as any;
     if (!decoded.tenantId || !decoded.role) {
       return next(new UnauthenticatedError("Invalid token payload"));
+    }
+
+    // Check Redis blocklist (logged-out tokens are rejected)
+    if (await isBlocklisted(token)) {
+      return next(new UnauthenticatedError("Token has been revoked"));
     }
 
     req.ctx = {

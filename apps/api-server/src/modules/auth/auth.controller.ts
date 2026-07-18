@@ -39,3 +39,19 @@ export async function refresh(req: Request, res: Response, next: NextFunction) {
     next(err);
   }
 }
+
+/** POST /api/v1/auth/logout */
+export async function logout(req: Request, res: Response, next: NextFunction) {
+  try {
+    const authHeader = req.headers.authorization;
+    const accessToken = authHeader?.startsWith("Bearer ")
+      ? authHeader.split(" ")[1] ?? ""
+      : "";
+
+    const { refreshToken } = req.body as { refreshToken?: string };
+    await authService.logout(accessToken, refreshToken);
+    res.json({ data: { message: "Logged out successfully" } });
+  } catch (err) {
+    next(err);
+  }
+}
