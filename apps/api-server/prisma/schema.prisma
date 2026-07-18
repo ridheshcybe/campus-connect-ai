@@ -1,0 +1,211 @@
+// apps/api-server/prisma/schema.prisma
+// Mirrors infra/migrations/0001_init.sql exactly.
+// Do NOT run prisma migrate dev — use raw SQL migration instead (preserves RLS).
+// After schema changes: psql $DATABASE_URL -f infra/migrations/0001_init.sql && prisma generate
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenants {
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  slug        String   @unique
+  name        String
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  phoneNumbers    PhoneNumbers[]
+  users           Users[]
+  staffContacts   StaffContacts[]
+  faqs            Faqs[]
+  documents       Documents[]
+  documentChunks  DocumentChunks[]
+  calls           Calls[]
+  transcriptTurns TranscriptTurns[]
+  aiResponses     AiResponses[]
+  escalations     Escalations[]
+  settings        Settings?
+
+  @@map("tenants")
+}
+
+model PhoneNumbers {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  number    String
+  provider  String   @default("twilio")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant Tenants @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  calls  Calls[]
+
+  @@unique([tenantId, number])
+  @@map("phone_numbers")
+}
+
+model Users {
+  id            String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  email         String
+  passwordHash  String    @map("password_hash")
+  name          String
+  role          String    @default("viewer")
+  lastLoginAt   DateTime? @map("last_login_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant Tenants @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email], name: "tenantId_email")
+  @@map("users")
+}
+
+model StaffContacts {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  name       String
+  department String?
+  phone      String?
+  email      String?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant      Tenants      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  escalations Escalations[]
+
+  @@map("staff_contacts")
+}
+
+model Faqs {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  question  String
+  answer    String
+  category  String?
+  language  String   @default("en")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant Tenants @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("faqs")
+}
+
+model Documents {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  title     String
+  fileKey   String   @map("file_key")
+  mimeType  String   @map("mime_type")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant Tenants          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  chunks DocumentChunks[]
+
+  @@map("documents")
+}
+
+model DocumentChunks {
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  documentId  String   @map("document_id") @db.Uuid
+  chunkIndex  Int      @map("chunk_index")
+  text        String
+  // embedding stored as Unsupported — managed via raw SQL / pgvector
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant   Tenants   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  document Documents @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("document_chunks")
+}
+
+model Calls {
+  id                String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId          String    @map("tenant_id") @db.Uuid
+  phoneNumberId     String?   @map("phone_number_id") @db.Uuid
+  callerNumber      String    @map("caller_number")
+  channel           String    @default("voice")
+  language          String    @default("en")
+  status            String    @default("active")
+  issueCategory     String?   @map("issue_category")
+  confidenceScore   Decimal?  @map("confidence_score") @db.Decimal(4, 3)
+  durationSeconds   Int?      @map("duration_seconds")
+  recordingKey      String?   @map("recording_key")
+  summary           String?
+  followUpRequired  Boolean   @default(false) @map("follow_up_required")
+  startedAt         DateTime  @default(now()) @map("started_at") @db.Timestamptz
+  endedAt           DateTime? @map("ended_at") @db.Timestamptz
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant      Tenants          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  phoneNumber PhoneNumbers?    @relation(fields: [phoneNumberId], references: [id])
+  turns       TranscriptTurns[]
+  aiResponses AiResponses[]
+  escalations Escalations[]
+
+  @@map("calls")
+}
+
+model TranscriptTurns {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  callId    String   @map("call_id") @db.Uuid
+  turnIndex Int      @map("turn_index")
+  role      String
+  text      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant Tenants @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  call   Calls   @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  @@map("transcript_turns")
+}
+
+model AiResponses {
+  id              String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  callId          String   @map("call_id") @db.Uuid
+  turnIndex       Int      @map("turn_index")
+  answerText      String   @map("answer_text")
+  confidenceScore Decimal  @map("confidence_score") @db.Decimal(4, 3)
+  issueCategory   String?  @map("issue_category")
+  shouldEscalate  Boolean  @default(false) @map("should_escalate")
+  language        String   @default("en")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant Tenants @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  call   Calls   @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  @@map("ai_responses")
+}
+
+model Escalations {
+  id           String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  callId       String    @map("call_id") @db.Uuid
+  reason       String?
+  assignedTo   String?   @map("assigned_to") @db.Uuid
+  resolvedAt   DateTime? @map("resolved_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant       Tenants        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  call         Calls          @relation(fields: [callId], references: [id], onDelete: Cascade)
+  staffContact StaffContacts? @relation(fields: [assignedTo], references: [id])
+
+  @@map("escalations")
+}
+
+model Settings {
+  id               String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId         String   @unique @map("tenant_id") @db.Uuid
+  greetingText     String?  @map("greeting_text")
+  escalationEmail  String?  @map("escalation_email")
+  defaultLanguage  String   @default("en") @map("default_language")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant Tenants @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("settings")
+}

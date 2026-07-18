@@ -25,3 +25,15 @@ export class NotFoundError extends AppError {
     super(404, "NOT_FOUND", message);
   }
 }
+
+export class UnauthenticatedError extends AppError {
+  constructor(message = "Unauthenticated") {
+    super(401, "UNAUTHENTICATED", message);
+  }
+}
+
+export class ForbiddenError extends AppError {
+  constructor(message = "Forbidden") {
+    super(403, "FORBIDDEN", message);
+  }
+}
