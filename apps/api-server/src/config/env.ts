@@ -11,6 +11,7 @@ const EnvSchema = z.object({
   REDIS_URL: z.string().default("redis://localhost:6379"),
   JWT_SECRET: z.string().min(8).default("demo-secret-key-123456789-super-secret-key-987654321"),
   SERVICE_TOKEN: z.string().min(8).default("demo-service-token-123456789"),
+  GEMINI_API_KEY: z.string().min(20),
 });
 
 const parsed = EnvSchema.safeParse(process.env);

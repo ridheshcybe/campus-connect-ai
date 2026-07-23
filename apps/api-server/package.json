@@ -12,6 +12,7 @@
   "dependencies": {
     "@campus/config": "workspace:*",
     "@campus/types": "workspace:*",
+    "@google/genai": "^2.13.0",
     "@prisma/client": "^6.0.0",
     "argon2": "^0.41.1",
     "cors": "^2.8.5",
