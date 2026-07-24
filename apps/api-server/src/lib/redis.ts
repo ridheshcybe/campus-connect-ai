@@ -6,9 +6,12 @@ import { env } from "../config/env";
  * Reconnects automatically on disconnect.
  */
 export const redis = new Redis(env.REDIS_URL, {
-  lazyConnect: true,          // Don't fail at import-time if Redis is down
+  lazyConnect: true, // Don't fail at import-time if Redis is down
   enableReadyCheck: false,
-  maxRetriesPerRequest: null, // Required for BullMQ compatibility if added later
+  maxRetriesPerRequest: 1,
+  enableOfflineQueue: false,
+  retryStrategy: () => null,
+  reconnectOnError: () => false,
 });
 
 redis.on("error", (err: Error) => {

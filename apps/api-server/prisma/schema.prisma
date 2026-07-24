@@ -128,7 +128,7 @@ model Calls {
   callerNumber      String    @map("caller_number")
   channel           String    @default("voice")
   language          String    @default("en")
-  status            String    @default("active")
+  status            String    @default("in_progress")
   issueCategory     String?   @map("issue_category")
   confidenceScore   Decimal?  @map("confidence_score") @db.Decimal(4, 3)
   durationSeconds   Int?      @map("duration_seconds")
@@ -160,6 +160,7 @@ model TranscriptTurns {
   tenant Tenants @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   call   Calls   @relation(fields: [callId], references: [id], onDelete: Cascade)
 
+  @@unique([tenantId, callId, turnIndex])
   @@map("transcript_turns")
 }
 
@@ -178,6 +179,7 @@ model AiResponses {
   tenant Tenants @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   call   Calls   @relation(fields: [callId], references: [id], onDelete: Cascade)
 
+  @@unique([tenantId, callId, turnIndex])
   @@map("ai_responses")
 }
 

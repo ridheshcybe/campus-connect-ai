@@ -62,7 +62,7 @@ export function requireServiceAuth(req: Request, res: Response, next: NextFuncti
   req.ctx = {
     tenantId: tenantIdHeader,
     userId: null,
-    role: "admin",
+    role: "service",
   };
   next();
 }

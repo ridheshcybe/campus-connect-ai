@@ -1,10 +1,17 @@
 // apps/api-server/scripts/seed.ts
 // Seeds the database with two test tenants, users, and sample call data.
 // Run: npx tsx scripts/seed.ts
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import * as argon2 from "argon2";
 
-const db = new PrismaClient();
+const db = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DATABASE_ADMIN_URL ?? process.env.DATABASE_URL,
+    },
+  },
+});
 
 async function main() {
   console.log("🌱 Seeding database...");
@@ -68,11 +75,14 @@ async function main() {
   console.log(`✅ Users: ${abcAdmin.email}, ${xyzAdmin.email}`);
 
   // ── Sample Calls ──────────────────────────────────────────
-  const statuses = ["active", "completed", "escalated", "missed"] as const;
-  const categories = ["fees", "admission", "hostel", "exams", "general"] as const;
+  const statuses = ["in_progress", "resolved", "escalated", "pending"] as const;
+  const categories = ["fees", "admission", "hostel", "general", "transport"] as const;
   const languages = ["en", "ta", "hi"] as const;
 
   for (const tenant of [abc, xyz]) {
+    // Keep the development seed repeatable instead of accumulating duplicate calls.
+    await db.calls.deleteMany({ where: { tenantId: tenant.id } });
+
     for (let i = 0; i < 5; i++) {
       const status = statuses[i % statuses.length]!;
       const call = await db.calls.create({
@@ -92,9 +102,27 @@ async function main() {
       // Transcript turns
       await db.transcriptTurns.createMany({
         data: [
-          { tenantId: tenant.id, callId: call.id, turnIndex: 0, role: "ai", text: "Hello, how can I help you?" },
-          { tenantId: tenant.id, callId: call.id, turnIndex: 1, role: "caller", text: `Question about ${categories[i % categories.length]}` },
-          { tenantId: tenant.id, callId: call.id, turnIndex: 2, role: "ai", text: "Let me look that up for you." },
+          {
+            tenantId: tenant.id,
+            callId: call.id,
+            turnIndex: 0,
+            role: "ai",
+            text: "Hello, how can I help you?",
+          },
+          {
+            tenantId: tenant.id,
+            callId: call.id,
+            turnIndex: 1,
+            role: "caller",
+            text: `Question about ${categories[i % categories.length]}`,
+          },
+          {
+            tenantId: tenant.id,
+            callId: call.id,
+            turnIndex: 2,
+            role: "ai",
+            text: "Let me look that up for you.",
+          },
         ],
       });
 
@@ -132,5 +160,8 @@ async function main() {
 }
 
 main()
-  .catch((e) => { console.error("❌ Seed failed:", e); process.exit(1); })
+  .catch((e) => {
+    console.error("❌ Seed failed:", e);
+    process.exit(1);
+  })
   .finally(() => db.$disconnect());

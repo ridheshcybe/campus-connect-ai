@@ -1,6 +1,5 @@
-// apps/web-admin/src/lib/api/client.ts
-// Transport layer. The ONLY place that talks HTTP. Components never call fetch.
-import type { ApiError } from "@campus/types";
+import type { ApiError, RefreshResponse } from "@campus/types";
+import { clearStoredAuth, getStoredAuth, updateAccessToken } from "../authStorage";
 
 const BASE = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
 
@@ -15,30 +14,76 @@ export class HttpError extends Error {
   }
 }
 
-async function request<T>(path: string, params?: Record<string, unknown>): Promise<T> {
+interface RequestOptions {
+  method?: "GET" | "POST" | "PATCH";
+  params?: Record<string, unknown>;
+  body?: unknown;
+  auth?: boolean;
+  retryAfterRefresh?: boolean;
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  const auth = getStoredAuth();
+  if (!auth?.refreshToken) return null;
+
+  const response = await fetch(`${BASE}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refreshToken: auth.refreshToken }),
+  });
+  if (!response.ok) return null;
+
+  const body = (await response.json()) as { data: RefreshResponse };
+  updateAccessToken(body.data.accessToken);
+  return body.data.accessToken;
+}
+
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const url = new URL(BASE + path, window.location.origin);
-  if (params) {
-    for (const [key, value] of Object.entries(params)) {
-      if (value !== undefined && value !== null && value !== "") {
-        url.searchParams.set(key, String(value));
-      }
+  for (const [key, value] of Object.entries(options.params ?? {})) {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.set(key, String(value));
     }
   }
 
-  const res = await fetch(url.toString(), {
-    headers: { "Content-Type": "application/json" },
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (options.auth !== false) {
+    const accessToken = getStoredAuth()?.accessToken;
+    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  }
+
+  const response = await fetch(url.toString(), {
+    method: options.method ?? "GET",
+    headers,
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
 
-  const body = (await res.json().catch(() => null)) as unknown;
+  if (
+    response.status === 401 &&
+    options.auth !== false &&
+    options.retryAfterRefresh !== false &&
+    (await refreshAccessToken())
+  ) {
+    return request<T>(path, { ...options, retryAfterRefresh: false });
+  }
 
-  if (!res.ok) {
-    const err = (body as ApiError | null)?.error;
-    throw new HttpError(res.status, err?.code ?? "UNKNOWN", err?.message ?? res.statusText);
+  const body = (await response.json().catch(() => null)) as unknown;
+  if (!response.ok) {
+    if (response.status === 401 && options.auth !== false) clearStoredAuth();
+    const error = (body as ApiError | null)?.error;
+    throw new HttpError(
+      response.status,
+      error?.code ?? "UNKNOWN",
+      error?.message ?? response.statusText,
+    );
   }
 
   return body as T;
 }
 
 export const http = {
-  get: <T>(path: string, params?: Record<string, unknown>) => request<T>(path, params),
+  get: <T>(path: string, params?: Record<string, unknown>) => request<T>(path, { params }),
+  post: <T>(path: string, body?: unknown, auth = true) =>
+    request<T>(path, { method: "POST", body, auth }),
+  patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body }),
 };
