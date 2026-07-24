@@ -4,7 +4,7 @@
 
 Students, parents, and applicants call a college's dedicated number and get instant spoken answers in **English, Hindi, Tamil, Telugu, or Kannada** about admissions, fees, hostel, transport, placements, and more. The system transcribes speech, retrieves the college's own knowledge base (RAG), generates a grounded answer with an LLM, speaks it back, and **escalates to a human** when it's unsure or when money or safety is involved. Every call is logged for staff to review in an admin dashboard.
 
-> 📘 **Full project idea & docs → [`docs/PROJECT-BLUEPRINT.md`](docs/PROJECT-BLUEPRINT.md)** (start here) · [docs index](docs/README.md)
+> 📘 **Full project idea & docs → `docs/PROJECT-BLUEPRINT.md`** (start here) · docs index
 
 ---
 
@@ -26,15 +26,15 @@ docs/                  Architecture, flows, and integration documentation
 infra/                 Docker Compose, IaC, CI/CD, DB migrations
 ```
 
-See [`docs/PROJECT-STRUCTURE.md`](docs/PROJECT-STRUCTURE.md) for the full tree and the current-state-vs-target gap.
+See `docs/PROJECT-STRUCTURE.md` for the full tree and the current-state-vs-target gap.
 
 ## Tech stack
 
-TypeScript · pnpm workspaces + Turborepo · Express · React + Vite · Next.js · PostgreSQL + pgvector · Redis + BullMQ · Twilio · pluggable LLM (Claude / GPT-4 / Gemini) · JWT auth · Zod · Tailwind · Vitest. Rationale for each choice is in [the blueprint](docs/PROJECT-BLUEPRINT.md#6-technology-decisions).
+TypeScript · pnpm workspaces + Turborepo · Express · React + Vite · Next.js · PostgreSQL + pgvector · Redis + BullMQ · Twilio · pluggable LLM (Claude / GPT-4 / Gemini) · JWT auth · Zod · Tailwind · Vitest. Rationale for each choice is in the blueprint.
 
 ## Getting started
 
-> ✅ **Milestone M0 is done — the app runs.** The monorepo (pnpm + Turborepo), `packages/types` + `packages/config`, the `api-server`, and a working `web-admin` dashboard are in place. The database, auth, and the AI/voice pipeline land in M1+ (see the [roadmap](docs/PROJECT-BLUEPRINT.md#7-current-state-vs-target-the-gap)).
+> ✅ **Milestone M0 is done — the app runs.** The monorepo (pnpm + Turborepo), `packages/types` + `packages/config`, the `api-server`, and a working `web-admin` dashboard are in place. The database, auth, and the AI/voice pipeline land in M1+ (see the roadmap).
 
 ```bash
 # prerequisites: Node 20+ and pnpm.
@@ -57,8 +57,8 @@ The web-admin dev server proxies `/api` to the api-server, so no extra config is
 
 | Start here | Then |
 |---|---|
-| [Project Blueprint](docs/PROJECT-BLUEPRINT.md) | [Architecture](docs/architecture.md) · [App flows](docs/app-flows.md) · [AI flow](docs/ai-flow.md) |
-| [Docs index](docs/README.md) | [Backend guide](docs/backend-guide.md) · [Integration](docs/integration.md) · [Data model](docs/data-model.md) · [API](docs/api-endpoints.md) |
+| Project Blueprint | Architecture · App flows · AI flow |
+| Docs index | Backend guide · Integration · Data model · API |
 
 ## Team
 
@@ -69,7 +69,7 @@ The web-admin dev server proxies `/api` to the api-server, so no extra config is
 | **Don & Ridhesh** | Project structure & architecture, application flow, AI model layer, backend code checking, frontend↔backend↔AI integration, codebase organization (`packages/types`, `packages/config`, tooling) |
 | **Tanishqa & Surya** | AI development & training, voice pipeline (STT/AI/TTS), multilingual support, frontend (`web-admin` UI, `web-landing`, `packages/ui`), security (post-MVP) |
 
-Full breakdown and how we work together: [`docs/TEAM-ROLES.md`](docs/TEAM-ROLES.md).
+Full breakdown and how we work together: `docs/TEAM-ROLES.md`.
 
 ## License
 
