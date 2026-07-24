@@ -1,4 +1,4 @@
-this too # Project Structure
+# Project Structure
 
 > The monorepo layout — what each app and package is for. Companion to [`codebase-organization.md`](codebase-organization.md), which covers *how* they're wired (workspaces, dependency direction, conventions).
 > **Owners:** Don & Ridhesh · **Status:** Living · Part of the [Project Blueprint](PROJECT-BLUEPRINT.md) → §4.1 / §5.
