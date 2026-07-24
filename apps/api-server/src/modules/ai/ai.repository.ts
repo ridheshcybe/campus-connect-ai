@@ -59,3 +59,69 @@ export async function getNextTurnIndex(
     return latest ? latest.turnIndex + 1 : 1;
   });
 }
+
+export async function getConversationHistory(
+  tenantId: string,
+  callId: string
+) {
+  return withTenant(tenantId, async (tx) => {
+    return tx.transcriptTurns.findMany({
+      where: {
+        tenantId,
+        callId,
+      },
+      orderBy: {
+        turnIndex: "asc",
+      },
+    });
+  });
+}
+
+export async function saveTranscriptTurn(data: {
+  tenantId: string;
+  callId: string;
+  turnIndex: number;
+  role: string;
+  text: string;
+}) {
+  return withTenant(data.tenantId, async (tx) => {
+    return tx.transcriptTurns.create({
+      data: {
+        tenantId: data.tenantId,
+        callId: data.callId,
+        turnIndex: data.turnIndex,
+        role: data.role,
+        text: data.text,
+      },
+    });
+  });
+}
+
+export async function searchKnowledgeBase(
+  tenantId: string,
+  query: string
+) {
+  return withTenant(tenantId, async (tx) => {
+    return tx.faqs.findMany({
+      where: {
+        tenantId,
+        OR: [
+          {
+            question: {
+              contains: query,
+              mode: "insensitive",
+            },
+          },
+          {
+            answer: {
+              contains: query,
+              mode: "insensitive",
+            },
+          },
+        ],
+      },
+      take: 5,
+    });
+  });
+}
+
