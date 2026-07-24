@@ -1,7 +1,3 @@
-Here’s the **same Project Blueprint**, updated so the team section correctly uses **Tanishga** and reflects the new split between AI, frontend, and security. Everything else stays as-is. [workingsoftware](https://www.workingsoftware.dev/software-architecture-documentation-the-ultimate-guide/)
-
-***
-
 # CampusConnect AI — Project Blueprint
 
 > The single, complete "clean project idea" for CampusConnect AI. Start here.  
@@ -229,5 +225,3 @@ Here’s the **updated team table**:
 Unchanged: Tenant, `AiResponse`, Escalation, RAG, Orchestrator, RLS, Barge-in, etc. [workingsoftware](https://www.workingsoftware.dev/software-architecture-documentation-the-ultimate-guide/)
 
 ***
-
-You can paste this over your existing **Project Blueprint** and the only substantive change is the team section (and a couple of references) now correctly using **Tanishga** and the updated roles.
