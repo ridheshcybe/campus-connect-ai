@@ -34,7 +34,7 @@ export async function exportCsv(req: Request, res: Response, next: NextFunction)
     res.setHeader("Content-Type", "text/csv");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="calls-${new Date().toISOString().slice(0, 10)}.csv"`
+      `attachment; filename="calls-${new Date().toISOString().slice(0, 10)}.csv"`,
     );
     res.send(csv);
   } catch (err) {
@@ -54,7 +54,7 @@ export async function getById(req: Request, res: Response, next: NextFunction) {
 }
 
 const PatchSchema = z.object({
-  status: z.enum(["active", "completed", "escalated", "missed"]).optional(),
+  status: z.enum(["in_progress", "resolved", "pending", "escalated"]).optional(),
   followUpRequired: z.boolean().optional(),
 });
 

@@ -1,75 +1,89 @@
 # CampusConnect AI
 
-**A 24/7 multilingual voice assistant for college help desks — delivered as a white-label, multi-tenant SaaS.**
+CampusConnect AI is a white-label, multilingual college help-desk platform. Students and
+parents can ask questions by phone, SMS, or WhatsApp; answers are grounded in each college's
+knowledge base, uncertain or sensitive requests are escalated to staff, and every interaction
+is available in an authenticated admin dashboard.
 
-Students, parents, and applicants call a college's dedicated number and get instant spoken answers in **English, Hindi, Tamil, Telugu, or Kannada** about admissions, fees, hostel, transport, placements, and more. The system transcribes speech, retrieves the college's own knowledge base (RAG), generates a grounded answer with an LLM, speaks it back, and **escalates to a human** when it's unsure or when money or safety is involved. Every call is logged for staff to review in an admin dashboard.
+## Current working slice
 
-> 📘 **Full project idea & docs → `docs/PROJECT-BLUEPRINT.md`** (start here) · docs index
+The repository currently includes:
 
----
+- a pnpm/Turborepo TypeScript monorepo;
+- PostgreSQL + pgvector with tenant Row-Level Security and a restricted application role;
+- Redis-backed JWT login, refresh, and logout;
+- tenant-scoped call logs, call details, CSV export, and dashboard statistics;
+- a React/Vite admin dashboard with login and authenticated API requests;
+- a service-authenticated Gemini answer endpoint with validated output, deterministic
+  escalation, conversation persistence, and a safe no-key fallback;
+- Docker-based local infrastructure plus build, typecheck, test, and GitHub Actions checks.
 
-## Monorepo layout
+The FAQ, Documents, and Settings screens are placeholders. The voice orchestrator, Twilio
+streaming, ASR/TTS, worker, document ingestion, and production deployment arrive in later
+milestones described in [the project blueprint](docs/PROJECT-BLUEPRINT.md).
 
-```
-apps/
-  web-admin/           React SPA (Vite) — admin dashboard
-  web-landing/         Next.js — marketing + tenant onboarding
-  api-server/          Node + Express — central REST API (owns all DB access)
-  voice-orchestrator/  Node + WS — Twilio Media Streams + call state machine
-  worker/              Node + BullMQ — background jobs (follow-ups, summaries)
-packages/
-  ui/                  Shared React component library (Tailwind)
-  types/               Shared TypeScript types + Zod schemas (the contract)
-  config/              Shared constants, enums, env helpers
-  prompts/             LLM prompt templates + routing
-docs/                  Architecture, flows, and integration documentation
-infra/                 Docker Compose, IaC, CI/CD, DB migrations
-```
+## Run locally
 
-See `docs/PROJECT-STRUCTURE.md` for the full tree and the current-state-vs-target gap.
-
-## Tech stack
-
-TypeScript · pnpm workspaces + Turborepo · Express · React + Vite · Next.js · PostgreSQL + pgvector · Redis + BullMQ · Twilio · pluggable LLM (Claude / GPT-4 / Gemini) · JWT auth · Zod · Tailwind · Vitest. Rationale for each choice is in the blueprint.
-
-## Getting started
-
-> ✅ **Milestone M0 is done — the app runs.** The monorepo (pnpm + Turborepo), `packages/types` + `packages/config`, the `api-server`, and a working `web-admin` dashboard are in place. The database, auth, and the AI/voice pipeline land in M1+ (see the roadmap).
+Prerequisites: Node.js 20+, pnpm 9.12.3, and either Docker Desktop or a local PostgreSQL server.
 
 ```bash
-# prerequisites: Node 20+ and pnpm.
-# If you don't have pnpm:  corepack prepare pnpm@9.12.3 --activate   (or: npm i -g pnpm)
-
 pnpm install
-pnpm dev            # starts api-server (:4000) + web-admin (:5173) via Turborepo
-# then open http://localhost:5173
 
-# other commands
-pnpm build          # build every package/app
-pnpm typecheck      # typecheck the whole workspace
-pnpm --filter @campus/web-admin dev   # run a single app
-pnpm --filter @campus/api-server dev
+# PowerShell
+Copy-Item apps/api-server/.env.example apps/api-server/.env
+
+# macOS/Linux
+# cp apps/api-server/.env.example apps/api-server/.env
+
+pnpm db:up
+pnpm db:seed
+pnpm dev
 ```
 
-The web-admin dev server proxies `/api` to the api-server, so no extra config is needed. In M0 the api-server serves typed mock data; the database replaces it in M1.
+If Docker is unavailable but PostgreSQL is already installed, create a `campus` database,
+apply `infra/migrations/0001_init.sql` as the `postgres` administrator, and then run
+`pnpm db:seed`. Redis is optional for local UI development; readiness reports `degraded`
+and token revocation becomes best-effort until Redis is available.
 
-## Documentation
+Open [http://localhost:5173](http://localhost:5173) and sign in with:
 
-| Start here | Then |
-|---|---|
-| Project Blueprint | Architecture · App flows · AI flow |
-| Docs index | Backend guide · Integration · Data model · API |
+```text
+College slug: abc
+Email:        admin@abc.edu
+Password:     Admin@1234
+```
 
-## Team
+The web app runs on port `5173`, the API on `4000`, PostgreSQL on `5432`, and Redis on `6379`.
+`apps/web-admin` proxies `/api` to the API server during development.
 
-| Member | Responsibilities |
-|---|---|
-| **Vinay** | Backend development, APIs, database integration, connecting backend with AI services & telephony (`api-server`, `voice-orchestrator`, `worker`, DB, `infra`) |
-| **Rudra** | Testing & QA, bug reporting, feature validation, performance testing |
-| **Don & Ridhesh** | Project structure & architecture, application flow, AI model layer, backend code checking, frontend↔backend↔AI integration, codebase organization (`packages/types`, `packages/config`, tooling) |
-| **Tanishqa & Surya** | AI development & training, voice pipeline (STT/AI/TTS), multilingual support, frontend (`web-admin` UI, `web-landing`, `packages/ui`), security (post-MVP) |
+Gemini is optional for local setup. Add `GEMINI_API_KEY` to
+`apps/api-server/.env` to enable generated answers; without it, the AI endpoint returns and
+persists a safe human-escalation response.
 
-Full breakdown and how we work together: `docs/TEAM-ROLES.md`.
+## Verify
+
+```bash
+pnpm build
+pnpm typecheck
+pnpm test
+
+# Runtime health
+curl http://localhost:4000/health
+curl http://localhost:4000/api/v1/ready
+```
+
+## Repository layout
+
+```text
+apps/api-server/    Express API, auth, tenant repositories, AI service
+apps/web-admin/     React/Vite admin dashboard
+packages/types/     Shared TypeScript and Zod contracts
+packages/config/    Shared labels and application constants
+infra/migrations/   PostgreSQL, pgvector, and RLS schema
+docs/               Architecture, flows, API, security, and test plans
+```
+
+See the [documentation index](docs/README.md) for the complete design and roadmap.
 
 ## License
 

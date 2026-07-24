@@ -1,13 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
+import { LoginRequestSchema } from "@campus/types";
 import * as authService from "./auth.service";
 import { ValidationError } from "../../lib/errors";
-
-const LoginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(4),
-  tenantSlug: z.string().min(1),
-});
 
 const RefreshSchema = z.object({
   refreshToken: z.string().min(1),
@@ -16,7 +11,7 @@ const RefreshSchema = z.object({
 /** POST /api/v1/auth/login */
 export async function login(req: Request, res: Response, next: NextFunction) {
   try {
-    const parsed = LoginSchema.safeParse(req.body);
+    const parsed = LoginRequestSchema.safeParse(req.body);
     if (!parsed.success) return next(new ValidationError(parsed.error.flatten()));
 
     const { tenantSlug, email, password } = parsed.data;
@@ -44,9 +39,7 @@ export async function refresh(req: Request, res: Response, next: NextFunction) {
 export async function logout(req: Request, res: Response, next: NextFunction) {
   try {
     const authHeader = req.headers.authorization;
-    const accessToken = authHeader?.startsWith("Bearer ")
-      ? authHeader.split(" ")[1] ?? ""
-      : "";
+    const accessToken = authHeader?.startsWith("Bearer ") ? (authHeader.split(" ")[1] ?? "") : "";
 
     const { refreshToken } = req.body as { refreshToken?: string };
     await authService.logout(accessToken, refreshToken);
