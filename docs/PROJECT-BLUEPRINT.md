@@ -236,5 +236,3 @@ Detailed per-milestone tasks live in each area doc.
 | **Barge-in** | Caller speaking over the AI's TTS, interrupting it. |
 
 ---
-
-*This blueprint supersedes any conflicting detail in older docs; where an area doc disagrees, update the area doc to match this file (or change this file first if the decision itself is changing).*

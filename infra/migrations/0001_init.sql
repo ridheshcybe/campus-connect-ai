@@ -5,7 +5,23 @@
 
 -- Extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "vector";
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'vector') THEN
+    CREATE EXTENSION IF NOT EXISTS "vector";
+  END IF;
+END
+$$;
+
+-- The API uses a restricted role because PostgreSQL superusers bypass RLS.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'campus_app') THEN
+    CREATE ROLE campus_app LOGIN PASSWORD 'campus_app_dev';
+  END IF;
+  ALTER ROLE campus_app WITH PASSWORD 'campus_app_dev';
+END
+$$;
 
 -- ────────────────────────────────────────
 -- TENANTS
@@ -91,13 +107,22 @@ CREATE TABLE IF NOT EXISTS document_chunks (
   document_id  UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
   chunk_index  INT NOT NULL,
   text         TEXT NOT NULL,
-  embedding    vector(1536),
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- HNSW index for fast cosine similarity search on embeddings
-CREATE INDEX IF NOT EXISTS idx_doc_chunks_embedding
-  ON document_chunks USING hnsw (embedding vector_cosine_ops);
+-- Use pgvector when available (the Docker image includes it). A plain array
+-- keeps local development functional on PostgreSQL installations without it.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
+    EXECUTE 'ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS embedding vector(1536)';
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_doc_chunks_embedding
+      ON document_chunks USING hnsw (embedding vector_cosine_ops)';
+  ELSE
+    ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS embedding DOUBLE PRECISION[];
+  END IF;
+END
+$$;
 
 -- ────────────────────────────────────────
 -- CALLS
@@ -109,7 +134,8 @@ CREATE TABLE IF NOT EXISTS calls (
   caller_number       TEXT NOT NULL,
   channel             TEXT NOT NULL DEFAULT 'voice',
   language            TEXT NOT NULL DEFAULT 'en',
-  status              TEXT NOT NULL DEFAULT 'active',
+  status              TEXT NOT NULL DEFAULT 'in_progress'
+    CHECK (status IN ('in_progress', 'resolved', 'pending', 'escalated')),
   issue_category      TEXT,
   confidence_score    NUMERIC(4,3),
   duration_seconds    INT,
@@ -134,7 +160,8 @@ CREATE TABLE IF NOT EXISTS transcript_turns (
   turn_index  INT NOT NULL,
   role        TEXT NOT NULL,
   text        TEXT NOT NULL,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(tenant_id, call_id, turn_index)
 );
 
 -- ────────────────────────────────────────
@@ -150,7 +177,8 @@ CREATE TABLE IF NOT EXISTS ai_responses (
   issue_category   TEXT,
   should_escalate  BOOLEAN NOT NULL DEFAULT FALSE,
   language         TEXT NOT NULL DEFAULT 'en',
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(tenant_id, call_id, turn_index)
 );
 
 -- ────────────────────────────────────────
@@ -206,9 +234,20 @@ BEGIN
     EXECUTE format(
       'DROP POLICY IF EXISTS tenant_isolation ON %I;
        CREATE POLICY tenant_isolation ON %I
-         USING (tenant_id = NULLIF(current_setting(''app.tenant_id'', true), '''')::UUID);',
+         USING (tenant_id = NULLIF(current_setting(''app.tenant_id'', true), '''')::UUID)
+         WITH CHECK (tenant_id = NULLIF(current_setting(''app.tenant_id'', true), '''')::UUID);',
       tbl, tbl
     );
   END LOOP;
 END
 $$;
+
+GRANT CONNECT ON DATABASE campus TO campus_app;
+GRANT USAGE ON SCHEMA public TO campus_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO campus_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO campus_app;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO campus_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO campus_app;

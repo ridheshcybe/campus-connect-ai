@@ -1,4 +1,11 @@
-import * as repo from "./ai.repository";
+import {
+  AiResponseSchema,
+  ISSUE_CATEGORIES,
+  LANGUAGES,
+  type AiAnswerRequest,
+  type AiResponse,
+} from "@campus/types";
+import { CONFIDENCE_ESCALATION_THRESHOLD } from "@campus/config";
 import { NotFoundError } from "../../lib/errors";
 import { ai } from "../../lib/gemini";
 import { z } from "zod";
@@ -26,10 +33,22 @@ const AiResponseSchema = z.object({
   language: z.string(),
 });
 
-interface AnswerInput {
-  transcript: string;
-  language: string;
-  callId: string;
+const HIGH_RISK_PATTERNS = [
+  /money\s+(was\s+)?deducted/i,
+  /payment\s+(failed|issue|problem)/i,
+  /emergency|accident|unsafe|danger/i,
+  /talk|speak|connect.*human|real person/i,
+];
+
+function safeFallback(language: AiAnswerRequest["language"]): AiResponse {
+  return {
+    answerText:
+      "I’m unable to verify that information right now. I’ll escalate this to the college help desk.",
+    confidenceScore: 0,
+    issueCategory: "general",
+    shouldEscalate: true,
+    language,
+  };
 }
 
 function buildPrompt(
