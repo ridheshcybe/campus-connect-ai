@@ -5,6 +5,19 @@ import { z } from "zod";
 import * as docs from "./document.repository";
 import * as escalationRepo from "./escalation.repository";
 
+function buildConversation(history: { role: string; text: string }[]) {
+  return history
+    .map(turn => `${turn.role}: ${turn.text}`)
+    .join("\n");
+}
+
+function cleanGeminiResponse(text: string) {
+  return text
+    .replace(/```json/g, "")
+    .replace(/```/g, "")
+    .trim();
+}
+
 const AiResponseSchema = z.object({
   answerText: z.string(),
   confidenceScore: z.number(),
@@ -17,6 +30,77 @@ interface AnswerInput {
   transcript: string;
   language: string;
   callId: string;
+}
+
+function buildPrompt(
+  conversation: string,
+  transcript: string,
+  language: string,
+  knowledgeContext: string,
+  knowledgeBase: string
+) {
+  return `
+You are CampusConnect AI, a multilingual college help desk assistant.
+
+Your responsibilities include helping students with:
+
+- Admissions
+- Fees
+- Scholarships
+- Hostel
+- Transport
+- Timetable
+- Attendance
+- Examination
+- Faculty
+- Campus facilities
+
+Answer politely and professionally.
+
+Conversation History:
+${conversation}
+
+Knowledge Base FAQ:
+${knowledgeContext}
+
+Relevant Documents:
+${knowledgeBase}
+
+Latest Student Question:
+${transcript}
+
+Use the conversation history whenever necessary.
+
+Use the FAQ and relevant documents to answer accurately.
+
+Rules:
+
+- Prefer information from the Knowledge Base and Relevant Documents.
+- Never invent or guess college policies.
+- If the required information is unavailable, set shouldEscalate to true.
+- Keep responses concise (under 150 words).
+- Be polite and professional.
+- Answer in the student's language.
+
+If you are unsure,
+set shouldEscalate to true.
+
+Respond ONLY with valid JSON.
+
+Detect the student's language automatically.
+
+Reply in the SAME language as the student.
+
+Return the detected language code.
+
+{
+  "answerText": "...",
+  "confidenceScore": 0.95,
+  "issueCategory": "...",
+  "shouldEscalate": false,
+  "language": "${language}"
+}
+`;
 }
 
 export async function generateAnswer(
@@ -33,234 +117,170 @@ export async function generateAnswer(
   }
 
   const history = await repo.getConversationHistory(
-  tenantId,
-  input.callId
-);
+    tenantId,
+    input.callId
+  );
 
-const conversation = history
-  .map(turn => `${turn.role}: ${turn.text}`)
-  .join("\n");
+  const conversation = buildConversation(history);
 
   const knowledge = await repo.searchKnowledgeBase(
-  tenantId,
-  input.transcript
-);
+    tenantId,
+    input.transcript
+  );
 
-const knowledgeContext = knowledge.length
-  ? knowledge
-      .map(
-        faq =>
-          `Question: ${faq.question}\nAnswer: ${faq.answer}`
-      )
-      .join("\n\n")
-  : "No matching knowledge found.";
+  const knowledgeContext = knowledge.length
+    ? knowledge
+        .map(
+          faq =>
+            `Question: ${faq.question}\nAnswer: ${faq.answer}`
+        )
+        .join("\n\n")
+    : "No matching knowledge found.";
 
   const documents = await docs.searchDocuments(
-  tenantId,
-  input.transcript
-);
+    tenantId,
+    input.transcript
+  );
 
-const knowledgeBase = documents
-  .map(doc => doc.text)
-  .join("\n\n");
+  const knowledgeBase = documents
+    .slice(0, 3)
+    .map(
+      (doc, index) =>
+        `Document ${index + 1}:\n${doc.text}`
+    )
+    .join("\n\n");
 
   try {
+  const prompt = buildPrompt(
+    conversation,
+    input.transcript,
+    input.language,
+    knowledgeContext,
+    knowledgeBase
+  );
 
-const prompt = `
-You are CampusConnect AI, a multilingual AI assistant for a college help desk.
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: prompt,
+  });
 
-Your goal is to provide accurate, concise, and helpful answers to students.
+  const text = response.text?.trim();
 
-Responsibilities include:
-- Admissions
-- Fees
-- Scholarships
-- Hostel
-- Transport
-- Timetable
-- Attendance
-- Examination
-- Faculty
-- Campus facilities
+  if (!text) {
+    throw new Error("Gemini returned an empty response.");
+  }
 
-Rules:
+  const cleaned = cleanGeminiResponse(text);
 
-- Be polite and professional.
-- Answer only what the student asked.
-- Never invent college-specific information.
-- Prefer the College Knowledge Base over your own knowledge.
-- If you are uncertain, set shouldEscalate to true.
-- Confidence scores should follow:
+  const parsed = (() => {
+    try {
+      return AiResponseSchema.parse(JSON.parse(cleaned));
+    } catch {
+      throw new Error("Invalid JSON returned by Gemini.");
+    }
+  })();
 
-1.00 = Exact answer from College Knowledge Base
-0.90–0.99 = Very confident
-0.70–0.89 = Reasonably confident
-0.50–0.69 = Partial information
-Below 0.50 = Escalate
+  const nextTurn = await repo.getNextTurnIndex(
+    tenantId,
+    input.callId
+  );
 
-Issue categories should be one of:
-
-admissions
-fees
-scholarships
-hostel
-transport
-timetable
-attendance
-examination
-faculty
-campus
-technical
-general
-unknown
-
-Below is the conversation so far.
-
-College Knowledge Base:
-
-${knowledgeContext}
-
-Rules:
-
-1. If the knowledge base contains the answer, ALWAYS use it.
-2. Do NOT change facts, numbers, dates, fees or policies from the knowledge base.
-3. Only use your general knowledge if the answer is NOT found in the knowledge base.
-4. If the knowledge base does not contain enough information, politely say you 
-are unsure and set shouldEscalate to true.
-5. Never invent college-specific information.
-
-If the conversation history is empty, answer normally.
-Otherwise, use it to understand context and follow-up questions.
-
-Knowledge Base:
-
-${knowledgeBase}
-
-Use the above college information whenever it answers the student's question.
-If the answer is not present, use general reasoning but set shouldEscalate to
-true if you're not confident.
-
-Conversation History:
-${conversation}
-
-Latest Student Question:
-${input.transcript}
-
-Use the conversation history to answer naturally.
-If the latest question refers to something mentioned earlier,
-use the previous context instead of treating it as a new conversation.
-
-If you are unsure,
-set shouldEscalate to true.
-
-Respond ONLY with valid JSON.
-
-Detect the student's language automatically.
-
-Reply in the SAME language that the student used.
-
-Return the detected language code
-(for example: en, hi, ta, te, kn).
-
-{
-  "answerText": "...",
-  "confidenceScore": 0.95,
-  "issueCategory": "...",
-  "shouldEscalate": false,
-  "language": "detected-language-code"
-}
-`;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-    });
-
-    const text = response.text ?? "";
-
-    const cleaned = text
-      .replace(/```json/g, "")
-      .replace(/```/g, "")
-      .trim();
-
-    const parsed = AiResponseSchema.parse(JSON.parse(cleaned));
-
-    const nextTurn = await repo.getNextTurnIndex(
-  tenantId,
-  input.callId
-);
-
-await repo.saveTranscriptTurn({
-  tenantId,
-  callId: input.callId,
-  turnIndex: nextTurn,
-  role: "student",
-  text: input.transcript,
-});
-
-await repo.saveTranscriptTurn({
-  tenantId,
-  callId: input.callId,
-  turnIndex: nextTurn + 1,
-  role: "student",
-  text: input.transcript,
-});
+  await repo.saveTranscriptTurn({
+    tenantId,
+    callId: input.callId,
+    turnIndex: nextTurn,
+    role: "student",
+    text: input.transcript,
+  });
 
   await repo.saveAiResponse({
-  tenantId,
-  callId: input.callId,
-  turnIndex: nextTurn,
-  answerText: parsed.answerText,
-  confidenceScore: parsed.confidenceScore,
-  issueCategory: parsed.issueCategory ?? null,
-  shouldEscalate: parsed.shouldEscalate,
-  language: parsed.language,
-});
-
-await repo.saveTranscriptTurn({
-  tenantId,
-  callId: input.callId,
-  turnIndex: nextTurn + 1,
-  role: "assistant",
-  text: parsed.answerText,
-});
-
-if (parsed.shouldEscalate) {
-  await escalationRepo.createEscalation({
     tenantId,
     callId: input.callId,
-    reason:
-      parsed.issueCategory ??
-      "AI confidence too low",
+    turnIndex: nextTurn,
+    answerText: parsed.answerText,
+    confidenceScore: parsed.confidenceScore,
+    issueCategory: parsed.issueCategory ?? null,
+    shouldEscalate: parsed.shouldEscalate,
+    language: parsed.language,
   });
-}
 
-return parsed;
-
-if (parsed.shouldEscalate) {
-  await escalationRepo.createEscalation({
+  await repo.saveTranscriptTurn({
     tenantId,
     callId: input.callId,
-    reason:
-      parsed.issueCategory ??
-      "AI confidence too low",
+    turnIndex: nextTurn + 1,
+    role: "assistant",
+    text: parsed.answerText,
   });
-}
-'v'
 
-return parsed;
+  if (parsed.shouldEscalate) {
+    await escalationRepo.createEscalation({
+      tenantId,
+      callId: input.callId,
+      reason:
+        parsed.issueCategory ||
+        (parsed.confidenceScore < 0.5
+          ? "Low AI confidence"
+          : "Human assistance requested"),
+    });
+  }
 
-  } catch (err) {
+  return parsed;
 
-    console.error(err);
+} catch (err) {
+  console.error(err);
 
-    return {
-      answerText: "Sorry, I'm unable to generate a response right now.",
+  try {
+    const nextTurn = await repo.getNextTurnIndex(
+      tenantId,
+      input.callId
+    );
+
+    await repo.saveTranscriptTurn({
+      tenantId,
+      callId: input.callId,
+      turnIndex: nextTurn,
+      role: "student",
+      text: input.transcript,
+    });
+
+    await repo.saveAiResponse({
+      tenantId,
+      callId: input.callId,
+      turnIndex: nextTurn,
+      answerText:
+        "I'm sorry, I couldn't process your request at the moment. Your query has been marked for human assistance.",
       confidenceScore: 0,
       issueCategory: "unknown",
       shouldEscalate: true,
       language: input.language,
-    };
+    });
 
+    await repo.saveTranscriptTurn({
+      tenantId,
+      callId: input.callId,
+      turnIndex: nextTurn + 1,
+      role: "assistant",
+      text:
+        "I'm sorry, I couldn't process your request at the moment. Your query has been marked for human assistance.",
+    });
+
+    await escalationRepo.createEscalation({
+      tenantId,
+      callId: input.callId,
+      reason: "Gemini failed to generate a response",
+    });
+
+  } catch (dbErr) {
+    console.error(dbErr);
   }
+
+  return {
+    answerText:
+      "I'm sorry, I couldn't process your request at the moment. Your query has been marked for human assistance.",
+    confidenceScore: 0,
+    issueCategory: "unknown",
+    shouldEscalate: true,
+    language: input.language,
+  };
+}
 }
