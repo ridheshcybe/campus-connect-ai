@@ -54,7 +54,7 @@ export function MainLayout() {
   const initials =
     user?.name
       .split(" ")
-      .map((part) => part[0])
+      .map((part: string) => part[0])
       .join("")
       .slice(0, 2)
       .toUpperCase() ?? "CC";
